@@ -1147,10 +1147,10 @@ final class Model: NSObject, ObservableObject, @unchecked Sendable {
         return showCameraPreview
     }
 
-    func takeSnapshot(isChatBot: Bool = false, message: String? = nil, noDelay: Bool = false) {
+    func takeSnapshot(isChatBot: Bool = false, message: String? = nil, noDelay: Bool = false, onComplete: (() -> Void)? = nil) {
         let age = (isChatBot && !noDelay) ? stream.estimatedViewerDelay! : 0.0
-        media.takeSnapshot(age: age) { image, portraitImage in
-            guard let imageJpeg = image.jpegData(compressionQuality: 0.9) else {
+        media.takeSnapshot(age: age) {
+            image, portraitImage in guard let imageJpeg = image.jpegData(compressionQuality: 0.9) else {
                 return
             }
             DispatchQueue.main.async {
@@ -1158,6 +1158,8 @@ final class Model: NSObject, ObservableObject, @unchecked Sendable {
                 self.makeToast(title: String(localized: "Snapshot saved to Photos"))
                 self.tryUploadSnapshotToDiscord(imageJpeg, message, isChatBot)
                 self.printAllCatPrinters(image: portraitImage)
+
+                onComplete?()
             }
         }
     }
@@ -5371,6 +5373,8 @@ final class Model: NSObject, ObservableObject, @unchecked Sendable {
             permissions: database.chat.botCommandPermissions!.tts,
             command: command
         ) {
+            (allowed) -> () in guard allowed else { return }
+
             self.makeToast(
                 title: String(localized: "Chat bot"),
                 subTitle: String(localized: "Turning on chat text to speech")
@@ -5384,6 +5388,8 @@ final class Model: NSObject, ObservableObject, @unchecked Sendable {
             permissions: database.chat.botCommandPermissions!.tts,
             command: command
         ) {
+            (allowed) -> () in guard allowed else { return }
+
             self.makeToast(
                 title: String(localized: "Chat bot"),
                 subTitle: String(localized: "Turning off chat text to speech")
@@ -5398,6 +5404,8 @@ final class Model: NSObject, ObservableObject, @unchecked Sendable {
             permissions: database.chat.botCommandPermissions!.tts,
             command: command
         ) {
+            (allowed) -> () in guard allowed else { return }
+
             let user = command.user() ?? "Unknown"
             self.chatTextToSpeech.say(user: user, message: command.rest(), isRedemption: false)
         }
@@ -5408,6 +5416,8 @@ final class Model: NSObject, ObservableObject, @unchecked Sendable {
             permissions: database.chat.botCommandPermissions!.fix,
             command: command
         ) {
+            (allowed) -> () in guard allowed else { return }
+
             if self.obsWebSocket != nil {
                 self.makeToast(
                     title: String(localized: "Chat bot"),
@@ -5430,6 +5440,8 @@ final class Model: NSObject, ObservableObject, @unchecked Sendable {
             permissions: database.chat.botCommandPermissions!.map,
             command: command
         ) {
+            (allowed) -> () in guard allowed else { return }
+
             self.makeToast(
                 title: String(localized: "Chat bot"),
                 subTitle: String(localized: "Zooming out map")
@@ -5449,10 +5461,20 @@ final class Model: NSObject, ObservableObject, @unchecked Sendable {
             permissions: database.chat.botCommandPermissions!.snapshot!,
             command: command
         ) {
+            (allowed) -> () in guard allowed else {
+                self.sendChatMessage(message: String(localized: "Missing permissions to take snapshot!"));
+                return
+            }
+
             if let user = command.user() {
-                self.takeSnapshot(isChatBot: true, message: self.formatSnapshotTakenBy(user: user))
+                let message = self.formatSnapshotTakenBy(user: user)
+                self.takeSnapshot(isChatBot: true, message: message) {
+                    self.sendChatMessage(message: message);
+                }
             } else {
-                self.takeSnapshot(isChatBot: true)
+                self.takeSnapshot(isChatBot: true) {
+                    self.sendChatMessage(message: String(localized: "Snapshot taken!"));
+                }
             }
         }
     }
@@ -5462,6 +5484,8 @@ final class Model: NSObject, ObservableObject, @unchecked Sendable {
             permissions: database.chat.botCommandPermissions!.snapshot!,
             command: command
         ) {
+            (allowed) -> () in guard allowed else { return }
+
             self.takeSnapshotWithCountdown(
                 isChatBot: true,
                 message: command.rest(),
@@ -5475,6 +5499,8 @@ final class Model: NSObject, ObservableObject, @unchecked Sendable {
             permissions: database.chat.botCommandPermissions!.audio!,
             command: command
         ) {
+            (allowed) -> () in guard allowed else { return }
+
             guard !self.isMuteOn else {
                 return
             }
@@ -5493,6 +5519,8 @@ final class Model: NSObject, ObservableObject, @unchecked Sendable {
             permissions: database.chat.botCommandPermissions!.audio!,
             command: command
         ) {
+            (allowed) -> () in guard allowed else { return }
+
             guard self.isMuteOn else {
                 return
             }
@@ -5514,6 +5542,8 @@ final class Model: NSObject, ObservableObject, @unchecked Sendable {
             permissions: database.chat.botCommandPermissions!.reaction!,
             command: command
         ) {
+            (allowed) -> () in guard allowed else { return }
+
             let reaction: AVCaptureReactionType
             switch command.popFirst() {
             case "fireworks":
@@ -5546,6 +5576,8 @@ final class Model: NSObject, ObservableObject, @unchecked Sendable {
             permissions: database.chat.botCommandPermissions!.scene!,
             command: command
         ) {
+            (allowed) -> () in guard allowed else { return }
+
             self.selectSceneByName(name: sceneName)
         }
     }
@@ -5555,6 +5587,8 @@ final class Model: NSObject, ObservableObject, @unchecked Sendable {
             permissions: database.chat.botCommandPermissions!.alert!,
             command: command
         ) {
+            (allowed) -> () in guard allowed else { return }
+
             guard let alert = command.popFirst() else {
                 return
             }
@@ -5569,6 +5603,8 @@ final class Model: NSObject, ObservableObject, @unchecked Sendable {
             permissions: database.chat.botCommandPermissions!.fax!,
             command: command
         ) {
+            (allowed) -> () in guard allowed else { return }
+
             let url = URL(string: command.peekFirst() ?? "")
             if url != nil {
                 _ = command.popFirst()
@@ -5587,6 +5623,8 @@ final class Model: NSObject, ObservableObject, @unchecked Sendable {
             permissions: database.chat.botCommandPermissions!.filter!,
             command: command
         ) {
+            (allowed) -> () in guard allowed else { return }
+
             guard let filter = command.popFirst(), let state = command.popFirst() else {
                 return
             }
@@ -5620,6 +5658,8 @@ final class Model: NSObject, ObservableObject, @unchecked Sendable {
             permissions: database.chat.botCommandPermissions!.tesla!,
             command: command
         ) {
+            (allowed) -> () in guard allowed else { return }
+
             switch command.popFirst() {
             case "trunk":
                 self.handleChatBotMessageTeslaTrunk(command: command)
@@ -5658,10 +5698,10 @@ final class Model: NSObject, ObservableObject, @unchecked Sendable {
     private func executeIfUserAllowedToUseChatBot(
         permissions: SettingsChatBotPermissionsCommand,
         command: ChatBotCommand,
-        onCompleted: @escaping () -> Void
+        onCompleted: @escaping (Bool) -> Void
     ) {
         if command.message.isModerator, permissions.moderatorsEnabled {
-            onCompleted()
+            onCompleted(true)
             return
         }
         if command.message.isSubscriber, permissions.subscribersEnabled! {
@@ -5676,7 +5716,7 @@ final class Model: NSObject, ObservableObject, @unchecked Sendable {
                                 if let tier = data?.tierAsNumber(),
                                    tier >= permissions.minimumSubscriberTier!
                                 {
-                                    onCompleted()
+                                    onCompleted(true)
                                     return
                                 }
                                 self.executeIfUserAllowedToUseChatBotAfterSubscribeCheck(
@@ -5686,14 +5726,15 @@ final class Model: NSObject, ObservableObject, @unchecked Sendable {
                                 )
                             }
                         }
+                        onCompleted(false)
                         return
                     }
                 } else {
-                    onCompleted()
+                    onCompleted(true)
                     return
                 }
             } else {
-                onCompleted()
+                onCompleted(true)
                 return
             }
         }
@@ -5707,23 +5748,28 @@ final class Model: NSObject, ObservableObject, @unchecked Sendable {
     private func executeIfUserAllowedToUseChatBotAfterSubscribeCheck(
         permissions: SettingsChatBotPermissionsCommand,
         command: ChatBotCommand,
-        onCompleted: @escaping () -> Void
+        onCompleted: @escaping (Bool) -> Void
     ) {
         guard let user = command.user() else {
+            onCompleted(true)
             return
         }
         switch command.message.platform {
         case .twitch:
             if isTwitchUserAllowedToUseChatBot(permissions: permissions, user: user) {
-                onCompleted()
+                onCompleted(true)
+                return
             }
         case .kick:
             if isKickUserAllowedToUseChatBot(permissions: permissions, user: user) {
-                onCompleted()
+                onCompleted(true)
+                return
             }
         default:
             break
         }
+
+        onCompleted(false)
     }
 
     private func isTwitchUserAllowedToUseChatBot(permissions: SettingsChatBotPermissionsCommand,
@@ -11413,3 +11459,4 @@ private func videoCaptureError() -> String {
         String(localized: "Try to lower stream FPS and resolution."),
     ].joined(separator: "\n")
 }
+
