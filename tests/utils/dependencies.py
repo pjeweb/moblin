@@ -8,9 +8,9 @@ def _is_executable_in_path(name: str) -> bool:
     return shutil.which(name) is not None
 
 
-def check_dependencies():
+def check_dependencies(executables: tuple[str, ...] | None = None):
     missing_dependencies = []
-    for executable in [
+    defaults = (
         "ffmpeg",
         "qrtool",
         "mediamtx",
@@ -20,10 +20,12 @@ def check_dependencies():
         "lsof",
         "tcpdump",
         "tesseract",
-    ]:
+    )
+    for executable in defaults if executables is None else executables:
         if not _is_executable_in_path(executable):
             missing_dependencies.append(f"{executable} executable not found")
-    missing_dependencies += ffmpeg.check_dependencies()
+    if executables is None and _is_executable_in_path("ffmpeg"):
+        missing_dependencies += ffmpeg.check_dependencies()
     if len(missing_dependencies) > 0:
         print("--- Missing dependencies ---")
         print()

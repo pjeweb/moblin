@@ -7,6 +7,7 @@ from .suites import http_proxy
 from .suites import ingests
 from .suites import macros
 from .suites import mic
+from .suites import mixer
 from .suites import music
 from .suites import record
 from .suites import remote_control_scene_config
@@ -20,7 +21,9 @@ from .utils.runner import create_parser
 from .utils.runner import run
 
 
-def create_suites(moblin, _):
+def create_suites(moblin, args):
+    if args.mixer_channels is not None or args.mixer_mic_delay:
+        return mixer.tests(moblin, args.mixer_channels, args.mixer_mic_delay)
     return [
         talkback.tests(moblin),
         ingests.tests(moblin),
@@ -43,9 +46,21 @@ def create_suites(moblin, _):
     ]
 
 
+def required_executables(args) -> tuple[str, ...] | None:
+    if args.mixer_channels is not None:
+        return ("ffmpeg", "ffprobe", "mediamtx")
+    if args.mixer_mic_delay:
+        return ("ffmpeg", "ffprobe")
+    return None
+
+
 def main():
     parser = create_parser("Run tests.")
-    run("test", parser, create_suites)
+    parser.add_argument(
+        "--mixer-channels", type=int, choices=(1, 2), help="Run MixerTones with this channel count."
+    )
+    parser.add_argument("--mixer-mic-delay", action="store_true", help="Run the acoustic mixer A/V test.")
+    run("test", parser, create_suites, required_executables)
 
 
 main()

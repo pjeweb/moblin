@@ -45,6 +45,19 @@ just test --device macpro
 just test --device macpro Talkback
 ```
 
+For the mixer, pass the expected channel count for the build under test.
+
+```bash
+just test --device macpro --mixer-channels 1 MixerTones
+```
+
+Run the A/V check on a device with a built-in microphone, front camera, and a
+speaker loud enough for the microphone to pick up the alert.
+
+```bash
+just test --device macpro --mixer-mic-delay MixerMicDelay
+```
+
 # Run the stability test
 
 ```bash

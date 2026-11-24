@@ -15,6 +15,7 @@ from .utils import FILES_DIR
 from .utils import TEST_DIR
 
 MakeTests = Callable[[Moblin, argparse.Namespace], list]
+RequiredExecutables = Callable[[argparse.Namespace], tuple[str, ...] | None]
 
 
 class HelpFormatter(argparse.HelpFormatter):
@@ -50,13 +51,18 @@ def _remove_previous_run_artifacts(name: str):
     (TEST_DIR / "logs" / f"{name}.log").unlink(missing_ok=True)
 
 
-def run(name: str, parser: argparse.ArgumentParser, make_tests: MakeTests):
+def run(
+    name: str,
+    parser: argparse.ArgumentParser,
+    make_tests: MakeTests,
+    required_executables: RequiredExecutables | None = None,
+):
     _remove_previous_run_artifacts(name)
     sequencer = systest.setup(name, parser, add_date_to_log_filename=False)
     sequencer.remove_filtered_testcases = True
     sequencer.compact_output = True
     args = parser.parse_args()
-    check_dependencies()
+    check_dependencies(required_executables(args) if required_executables else None)
     logging.getLogger("urllib3.connectionpool").setLevel(logging.INFO)
     logging.getLogger("websockets").setLevel(logging.WARNING)
     config = Config()
