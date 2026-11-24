@@ -12,6 +12,11 @@ private let risingFade = (0 ..< audioMixerFadeFrames).map {
 
 private let fallingFade = risingFade.map { 1 - $0 }
 
+func prepareAudioMixerFades() {
+    withExtendedLifetime(risingFade) {}
+    withExtendedLifetime(fallingFade) {}
+}
+
 enum AudioMixerInputKind {
     case builtin
     case buffered
@@ -50,6 +55,7 @@ func crossfadeAudioMixerSamples(from: UnsafePointer<Float>,
 
 final class AudioMixerInput {
     private let kind: AudioMixerInputKind
+    private let stats: AudioMixerReport
     private(set) var numberOfChannels = 0
     private(set) var writeIndex: Int64 = 0
     private(set) var numberOfSlips = 0
@@ -80,8 +86,22 @@ final class AudioMixerInput {
         return converterInput
     }
 
-    init(kind: AudioMixerInputKind) {
+    init(kind: AudioMixerInputKind, cameraId: UUID? = nil) {
         self.kind = kind
+        stats = AudioMixerReport { value in
+            let bits = UInt(bitPattern: value)
+            let resyncs = UInt32(truncatingIfNeeded: bits)
+            if let cameraId {
+                logger.debug("audio-mixer: \(cameraId) \(resyncs) resyncs")
+            } else {
+                logger.debug("audio-mixer: builtin \(bits >> 32) slips, \(resyncs) resyncs")
+            }
+        }
+    }
+
+    func reportStats() {
+        let counts = (UInt(UInt32(clamping: numberOfSlips)) << 32) | UInt(UInt32(clamping: numberOfResyncs))
+        stats.record(Int(bitPattern: counts))
     }
 
     deinit {

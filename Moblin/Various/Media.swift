@@ -697,8 +697,8 @@ final class Media: NSObject, @unchecked Sendable {
         processor?.setAudioDelay(delay: delay)
     }
 
-    func setMixedAudio(sources: [AudioMixerSourceSettings]?) {
-        processor?.setMixedAudio(sources: sources)
+    func setMixedAudio(sources: [AudioMixerSourceSettings]?, masterEffects: [AudioMixerEffectSettings] = []) {
+        processor?.setMixedAudio(sources: sources, masterEffects: masterEffects)
     }
 
     func registerEffect(_ effect: VideoEffect) {

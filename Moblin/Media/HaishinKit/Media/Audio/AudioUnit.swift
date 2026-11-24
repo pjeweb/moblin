@@ -176,7 +176,11 @@ final class AudioUnit: NSObject, @unchecked Sendable {
     private var isRunning = false
     private var builtinDelay = 0.0
     private var builtinNumberOfChannels = 0
-    private var mixer: AudioMixer?
+    private var mixer: AudioMixer? {
+        mixerPreparation.mixer
+    }
+
+    private let mixerPreparation = AudioMixerPreparation()
     private let mixerTimer = SimpleTimer(queue: processorPipelineQueue)
     private var latestMixerLogTime = ContinuousClock.now
 
@@ -391,10 +395,8 @@ final class AudioUnit: NSObject, @unchecked Sendable {
         }
     }
 
-    func setMixedAudio(sources: [AudioMixerSourceSettings]?) {
-        processorPipelineQueue.async {
-            self.setMixedAudioInternal(sources: sources)
-        }
+    func setMixedAudio(sources: [AudioMixerSourceSettings]?, masterEffects: [AudioMixerEffectSettings]) {
+        mixerPreparation.submit(sources: sources, master: masterEffects)
     }
 
     func setSpeechToText(enabled: Bool) {
@@ -450,25 +452,8 @@ final class AudioUnit: NSObject, @unchecked Sendable {
         session.automaticallyConfiguresApplicationAudioSession = false
     }
 
-    private func setMixedAudioInternal(sources: [AudioMixerSourceSettings]?) {
-        guard let sources else {
-            mixer = nil
-            updateMixerTimer()
-            return
-        }
-        if mixer == nil {
-            logger.info("audio-unit: Audio mixer enabled")
-            let mixer = AudioMixer()
-            mixer.setMasterGain(gain)
-            mixer.setMasterMuted(muted)
-            self.mixer = mixer
-            updateMixerTimer()
-        }
-        mixer?.setSources(sources)
-    }
-
     private func updateMixerTimer() {
-        if isRunning, mixer != nil {
+        if isRunning {
             let interval = Double(audioMixerFramesPerBlock) / audioMixerSampleRate
             mixerTimer.startPeriodic(interval: interval) { [weak self] in
                 self?.handleMixerTimer()
@@ -479,6 +464,10 @@ final class AudioUnit: NSObject, @unchecked Sendable {
     }
 
     private func handleMixerTimer() {
+        if mixerPreparation.adopt() {
+            mixer?.setMasterGain(gain)
+            mixer?.setMasterMuted(muted)
+        }
         guard let mixer, let processor else {
             return
         }
@@ -492,21 +481,11 @@ final class AudioUnit: NSObject, @unchecked Sendable {
                                          recordingSampleBuffer: recordingSampleBuffer)
             }
         }
+        mixerPreparation.finishTransition()
         if logger.debugEnabled, latestMixerLogTime.duration(to: .now) > .seconds(10) {
             latestMixerLogTime = .now
-            logMixerStats(mixer)
+            mixer.reportStats()
         }
-    }
-
-    private func logMixerStats(_ mixer: AudioMixer) {
-        var inputs: [String] = []
-        if let input = mixer.builtinInput {
-            inputs.append("builtin \(input.numberOfSlips) slips, \(input.numberOfResyncs) resyncs")
-        }
-        for (cameraId, input) in mixer.bufferedInputs {
-            inputs.append("\(cameraId) \(input.numberOfResyncs) resyncs")
-        }
-        logger.debug("audio-mixer: \(mixer.numberOfSkips) skips. \(inputs.joined(separator: ", "))")
     }
 
     private func setTalkbackInternal(cameraId: UUID?) {
