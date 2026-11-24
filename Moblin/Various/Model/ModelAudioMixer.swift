@@ -60,6 +60,17 @@ func makeMicDelayRange(audioMixer: Bool) -> ClosedRange<Double> {
     audioMixer ? -0.5 ... 2.0 : -0.5 ... 0.5
 }
 
+private func makeAudioMixerSends(output: SettingsMicsMicOutput) -> (stream: Float, recording: Float) {
+    switch output {
+    case .streamAndRecording:
+        (1, 1)
+    case .stream:
+        (1, 0)
+    case .recording:
+        (0, 1)
+    }
+}
+
 extension Model {
     func updateAudioMixer() {
         setAudioChannelsMap(channelsMap: makeAudioEncoderChannelsMap())
@@ -113,7 +124,9 @@ extension Model {
                                         channelsMap: makeAudioInputChannelsMap(),
                                         channel: mic.channel,
                                         gain: pow(10, mic.gainDb / 20),
-                                        delay: mic.delay.clamped(to: makeMicDelayRange(audioMixer: true)))
+                                        delay: mic.delay.clamped(to: makeMicDelayRange(audioMixer: true)),
+                                        voice: mic.processing == .voice,
+                                        sends: makeAudioMixerSends(output: mic.output))
     }
 
     private func makeAudioEncoderChannelsMap() -> [Int: Int] {
