@@ -183,6 +183,7 @@ final class AudioUnit: NSObject, @unchecked Sendable {
     private let mixerPreparation = AudioMixerPreparation()
     private let mixerTimer = SimpleTimer(queue: processorPipelineQueue)
     private var latestMixerLogTime = ContinuousClock.now
+    private var latestMixerLevelsTime = ContinuousClock.now
 
     override init() {
         super.init()
@@ -482,6 +483,11 @@ final class AudioUnit: NSObject, @unchecked Sendable {
             }
         }
         mixerPreparation.finishTransition()
+        let now = ContinuousClock.now
+        if latestMixerLevelsTime.duration(to: now) >= .milliseconds(100) {
+            latestMixerLevelsTime = now
+            processor.delegate.streamAudioMixerLevels(levels: mixer.takeLevels())
+        }
         if logger.debugEnabled, latestMixerLogTime.duration(to: .now) > .seconds(10) {
             latestMixerLogTime = .now
             mixer.reportStats()

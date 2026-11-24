@@ -70,7 +70,7 @@ private struct ButtonsSettingsView: View {
     private func pages() -> [ButtonsPage] {
         (1 ... controlBarPages).compactMap { page in
             let buttons = database.quickButtons.reversed().filter { button in
-                guard button.page == page else {
+                guard button.page == page, button.type != .mixer || database.debug.audioMixer else {
                     return false
                 }
                 return filter.isEmpty || button.name.lowercased().contains(filter.lowercased())

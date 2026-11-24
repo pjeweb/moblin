@@ -7,6 +7,9 @@ extension Model {
     }
 
     func isQuickButtonAllowed(type: SettingsQuickButtonType) -> Bool {
+        if type == .mixer, !database.debug.audioMixer {
+            return false
+        }
         guard isChatPhone() else {
             return true
         }
@@ -22,6 +25,8 @@ extension Model {
         case .mute:
             return false
         case .mic:
+            return false
+        case .mixer:
             return false
         case .blackScreen:
             return false

@@ -1009,6 +1009,13 @@ extension Model: MediaDelegate {
         }
     }
 
+    nonisolated func mediaOnAudioMixerLevels(levels: AudioMixerLevels) {
+        DispatchQueue.main.async {
+            let activeIds = Set(([self.mic.current] + self.mic.mixed).map(\.id))
+            self.audioMixerMeters.update(levels: levels, activeIds: activeIds)
+        }
+    }
+
     nonisolated func mediaOnLowFpsImage(_ lowFpsImage: Data?, _ frameNumber: UInt64) {
         guard let lowFpsImage else {
             return

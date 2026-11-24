@@ -1112,6 +1112,48 @@ struct AudioMixerSuite {
         #expect(calcMaximumStep(samples) < 0.5 / 1024 + 1e-6)
         #expect(numberOfRecordingBuffers == 22)
     }
+
+    @Test
+    func measuresSourcePeaksBeforeGainAndMute() {
+        let mixer = TestAudioMixer()
+        let builtinFormat = createFormat(.pcmFormatFloat32, 2, false)
+        let bufferedFormat = createFormat(.pcmFormatInt16, 2, true)
+        mixer.setSources([
+            createSettings(id: "builtin", gain: 0.25),
+            createSettings(id: "muted", bufferedAudio: cameraId, gain: 0),
+        ])
+        for tick in 0 ..< 40 {
+            mixer.appendBuiltin(
+                createSampleBuffer(builtinFormat, tick) { channel, _ in channel == 0 ? 0.5 : -0.25 },
+                createTime(tick)
+            )
+            mixer.appendBuffered(
+                cameraId: cameraId,
+                createSampleBuffer(bufferedFormat, tick) { _, _ in 0.75 }
+            )
+            while mixer.renderNextBlock(now: createTime(tick + 1)) != nil {}
+        }
+        var levels = mixer.takeLevels()
+        #expect(levels.sources == ["builtin": 0.5, "muted": 0.75])
+        #expect(levels.output == 0.125)
+        levels = mixer.takeLevels()
+        #expect(levels.sources == ["builtin": 0, "muted": 0])
+        #expect(levels.output == 0)
+    }
+
+    @Test
+    func measuresRecordingOnlySourceButNotOnStreamMeter() {
+        let mixer = TestAudioMixer()
+        let format = createFormat(.pcmFormatFloat32, 2, false)
+        mixer.setSources([createSettings(sends: (stream: 0, recording: 1))])
+        for tick in 0 ..< 40 {
+            mixer.appendBuiltin(createSampleBuffer(format, tick) { _, _ in 0.5 }, createTime(tick))
+            while mixer.renderNextBlock(now: createTime(tick + 1)) != nil {}
+        }
+        let levels = mixer.takeLevels()
+        #expect(levels.sources == ["mic": 0.5])
+        #expect(levels.output == 0)
+    }
 }
 
 private final class Output {
@@ -1246,6 +1288,10 @@ private final class TestAudioMixer {
 
     func appendBuffered(cameraId: UUID, _ sampleBuffer: CMSampleBuffer) {
         mixer.appendBuffered(cameraId: cameraId, sampleBuffer)
+    }
+
+    func takeLevels() -> AudioMixerLevels {
+        mixer.takeLevels()
     }
 
     func renderNextBlock(now: CMTime) -> (

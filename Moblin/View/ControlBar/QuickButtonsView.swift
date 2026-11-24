@@ -320,6 +320,10 @@ struct QuickButtonsInnerView: View {
         model.toggleShowingPanel(type: .bitrate, panel: .bitrate)
     }
 
+    private func mixerAction() {
+        model.toggleShowingPanel(type: .mixer, panel: .mixer)
+    }
+
     private func skipCurrentTtsAction() {
         model.chatTextToSpeech.skipCurrentMessage()
     }
@@ -490,6 +494,15 @@ struct QuickButtonsInnerView: View {
                                          buttonSize: size)
                         {
                             micAction()
+                            stopFilteringUnlessPresentingDialog()
+                        }
+                    case .mixer:
+                        QuickButtonImage(model: model,
+                                         quickButtonsSettings: quickButtonsSettings,
+                                         button: button,
+                                         buttonSize: size)
+                        {
+                            mixerAction()
                             stopFilteringUnlessPresentingDialog()
                         }
                     case .chat:

@@ -175,11 +175,13 @@ extension Model {
 
     func markMicAsConnected(id: String) {
         getMicById(id: id)?.connected = true
+        mic.objectWillChange.send()
         updateMixedMics()
     }
 
     func markMicAsDisconnected(id: String) {
         getMicById(id: id)?.connected = false
+        mic.objectWillChange.send()
         updateMixedMics()
     }
 

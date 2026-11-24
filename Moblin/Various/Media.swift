@@ -21,6 +21,7 @@ protocol MediaDelegate: AnyObject {
                             completion: (@Sendable (Data?, URLResponse?, (any Error)?) -> Void)?)
     func mediaOnAudioBuffer(_ sampleBuffer: CMSampleBuffer)
     func mediaOnBuiltinAudioNumberOfChannels(numberOfChannels: Int)
+    func mediaOnAudioMixerLevels(levels: AudioMixerLevels)
     func mediaOnLowFpsImage(_ lowFpsImage: Data?, _ frameNumber: UInt64)
     func mediaOnAttachCameraError()
     func mediaOnCaptureSessionError(_ message: String)
@@ -1113,6 +1114,10 @@ extension Media: ProcessorDelegate {
 
     func streamBuiltinAudioNumberOfChannels(numberOfChannels: Int) {
         delegate.mediaOnBuiltinAudioNumberOfChannels(numberOfChannels: numberOfChannels)
+    }
+
+    func streamAudioMixerLevels(levels: AudioMixerLevels) {
+        delegate.mediaOnAudioMixerLevels(levels: levels)
     }
 
     func streamLowFpsImage(lowFpsImage: Data?, frameNumber: UInt64) {

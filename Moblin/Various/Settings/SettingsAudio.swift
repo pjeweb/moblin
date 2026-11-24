@@ -36,10 +36,208 @@ enum SettingsMicsMicOutput: String, Codable, CaseIterable {
         case .streamAndRecording:
             String(localized: "Stream and recording")
         case .stream:
-            String(localized: "Stream")
+            String(localized: "Stream only")
         case .recording:
-            String(localized: "Recording")
+            String(localized: "Recording only")
         }
+    }
+}
+
+let audioMixerEqualizerFrequencyRange: ClosedRange<Float> = 20 ... 20000
+let audioMixerEqualizerGainRange: ClosedRange<Float> = -12 ... 12
+let audioMixerBandwidthRange: ClosedRange<Float> = 0.1 ... 3
+let audioMixerAttackRange: ClosedRange<Float> = 0.001 ... 0.2
+let audioMixerReleaseRange: ClosedRange<Float> = 0.01 ... 3
+let audioMixerCompressorThresholdRange: ClosedRange<Float> = -40 ... 0
+let audioMixerHeadroomRange: ClosedRange<Float> = 1 ... 20
+let audioMixerMakeupGainRange: ClosedRange<Float> = -12 ... 24
+let audioMixerExpanderThresholdRange: ClosedRange<Float> = -80 ... 0
+let audioMixerRatioRange: ClosedRange<Float> = 1 ... 20
+let audioMixerDeEsserFrequencyRange: ClosedRange<Float> = 2000 ... 15000
+let audioMixerDeEsserThresholdRange: ClosedRange<Float> = -60 ... 0
+let audioMixerMaximumReductionRange: ClosedRange<Float> = 0 ... 24
+
+private extension KeyedDecodingContainer {
+    func decode(_ key: Key, _ defaultValue: Float, _ range: ClosedRange<Float>) -> Float {
+        let value = decode(key, Float.self, defaultValue)
+        return value.isFinite ? value.clamped(to: range) : defaultValue
+    }
+}
+
+struct SettingsAudioMixerEqualizer: Codable, Equatable, Identifiable {
+    var id = UUID()
+    var enabled = false
+    var frequency: Float = 1000
+    var gain: Float = 0
+    var bandwidth: Float = 1
+
+    enum CodingKeys: CodingKey {
+        case id
+        case enabled
+        case frequency
+        case gain
+        case bandwidth
+    }
+
+    init() {}
+
+    init(from decoder: any Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        id = container.decode(.id, UUID.self, .init())
+        enabled = container.decode(.enabled, Bool.self, false)
+        frequency = container.decode(.frequency, 1000, audioMixerEqualizerFrequencyRange)
+        gain = container.decode(.gain, 0, audioMixerEqualizerGainRange)
+        bandwidth = container.decode(.bandwidth, 1, audioMixerBandwidthRange)
+    }
+}
+
+struct SettingsAudioMixerCompressor: Codable, Equatable {
+    var enabled = false
+    var threshold: Float = -24
+    var headroom: Float = 6
+    var attack: Float = 0.003
+    var release: Float = 0.12
+    var makeupGain: Float = 0
+
+    enum CodingKeys: CodingKey {
+        case enabled
+        case threshold
+        case headroom
+        case attack
+        case release
+        case makeupGain
+    }
+
+    init() {}
+
+    init(from decoder: any Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        enabled = container.decode(.enabled, Bool.self, false)
+        threshold = container.decode(.threshold, -24, audioMixerCompressorThresholdRange)
+        headroom = container.decode(.headroom, 6, audioMixerHeadroomRange)
+        attack = container.decode(.attack, 0.003, audioMixerAttackRange)
+        release = container.decode(.release, 0.12, audioMixerReleaseRange)
+        makeupGain = container.decode(.makeupGain, 0, audioMixerMakeupGainRange)
+    }
+}
+
+struct SettingsAudioMixerExpander: Codable, Equatable {
+    var enabled = false
+    var threshold: Float = -40
+    var ratio: Float = 4
+    var attack: Float = 0.003
+    var release: Float = 0.12
+
+    enum CodingKeys: CodingKey {
+        case enabled
+        case threshold
+        case ratio
+        case attack
+        case release
+    }
+
+    init() {}
+
+    init(from decoder: any Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        enabled = container.decode(.enabled, Bool.self, false)
+        threshold = container.decode(.threshold, -40, audioMixerExpanderThresholdRange)
+        ratio = container.decode(.ratio, 4, audioMixerRatioRange)
+        attack = container.decode(.attack, 0.003, audioMixerAttackRange)
+        release = container.decode(.release, 0.12, audioMixerReleaseRange)
+    }
+}
+
+struct SettingsAudioMixerDeEsser: Codable, Equatable {
+    var enabled = false
+    var frequency: Float = 6000
+    var bandwidth: Float = 1
+    var threshold: Float = -24
+    var maximumReduction: Float = 9
+
+    enum CodingKeys: CodingKey {
+        case enabled
+        case frequency
+        case bandwidth
+        case threshold
+        case maximumReduction
+    }
+
+    init() {}
+
+    init(from decoder: any Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        enabled = container.decode(.enabled, Bool.self, false)
+        frequency = container.decode(.frequency, 6000, audioMixerDeEsserFrequencyRange)
+        bandwidth = container.decode(.bandwidth, 1, audioMixerBandwidthRange)
+        threshold = container.decode(.threshold, -24, audioMixerDeEsserThresholdRange)
+        maximumReduction = container.decode(.maximumReduction, 9, audioMixerMaximumReductionRange)
+    }
+}
+
+let audioMixerMaximumEqualizers = 3
+
+class SettingsMicsMicEffects: Codable, ObservableObject {
+    @Published var expander: SettingsAudioMixerExpander = .init()
+    @Published var equalizers: [SettingsAudioMixerEqualizer] = []
+    @Published var compressor: SettingsAudioMixerCompressor = .init()
+    @Published var deEsser: SettingsAudioMixerDeEsser = .init()
+
+    var isEnabled: Bool {
+        expander.enabled || equalizers.contains(where: \.enabled) || compressor.enabled || deEsser.enabled
+    }
+
+    enum CodingKeys: CodingKey {
+        case expander
+        case equalizers
+        case compressor
+        case deEsser
+    }
+
+    func encode(to encoder: any Encoder) throws {
+        var container = encoder.container(keyedBy: CodingKeys.self)
+        try container.encode(.expander, expander)
+        try container.encode(.equalizers, equalizers)
+        try container.encode(.compressor, compressor)
+        try container.encode(.deEsser, deEsser)
+    }
+
+    init() {}
+
+    required init(from decoder: any Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        expander = container.decode(.expander, SettingsAudioMixerExpander.self, .init())
+        equalizers = container.decode(.equalizers, [SettingsAudioMixerEqualizer].self, [])
+        compressor = container.decode(.compressor, SettingsAudioMixerCompressor.self, .init())
+        deEsser = container.decode(.deEsser, SettingsAudioMixerDeEsser.self, .init())
+    }
+}
+
+class SettingsAudioOutputEffects: Codable, ObservableObject {
+    @Published var equalizers: [SettingsAudioMixerEqualizer] = []
+    @Published var deEsser: SettingsAudioMixerDeEsser = .init()
+
+    var isEnabled: Bool {
+        equalizers.contains(where: \.enabled) || deEsser.enabled
+    }
+
+    enum CodingKeys: CodingKey {
+        case equalizers
+        case deEsser
+    }
+
+    func encode(to encoder: any Encoder) throws {
+        var container = encoder.container(keyedBy: CodingKeys.self)
+        try container.encode(.equalizers, equalizers)
+        try container.encode(.deEsser, deEsser)
+    }
+
+    init() {}
+
+    required init(from decoder: any Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        equalizers = container.decode(.equalizers, [SettingsAudioMixerEqualizer].self, [])
+        deEsser = container.decode(.deEsser, SettingsAudioMixerDeEsser.self, .init())
     }
 }
 
@@ -67,6 +265,8 @@ class SettingsMicsMic: Codable, Identifiable, Equatable, ObservableObject, @unch
     @Published var mixed: Bool = false
     @Published var processing: SettingsMicsMicProcessing = .none
     @Published var output: SettingsMicsMicOutput = .streamAndRecording
+    @Published var muted: Bool = false
+    var effects: SettingsMicsMicEffects = .init()
 
     func isAudioSession() -> Bool {
         isBuiltin() || isExternal()
@@ -161,6 +361,8 @@ class SettingsMicsMic: Codable, Identifiable, Equatable, ObservableObject, @unch
         case channel
         case processing
         case output
+        case muted
+        case effects
     }
 
     func encode(to encoder: any Encoder) throws {
@@ -175,6 +377,8 @@ class SettingsMicsMic: Codable, Identifiable, Equatable, ObservableObject, @unch
         try container.encode(.channel, channel)
         try container.encode(.processing, processing)
         try container.encode(.output, output)
+        try container.encode(.muted, muted)
+        try container.encode(.effects, effects)
     }
 
     init() {}
@@ -197,6 +401,8 @@ class SettingsMicsMic: Codable, Identifiable, Equatable, ObservableObject, @unch
         channel = container.decode(.channel, Int?.self, nil)
         processing = container.decode(.processing, SettingsMicsMicProcessing.self, .none)
         output = container.decode(.output, SettingsMicsMicOutput.self, .streamAndRecording)
+        muted = container.decode(.muted, Bool.self, false)
+        effects = container.decode(.effects, SettingsMicsMicEffects.self, .init())
     }
 }
 
@@ -237,6 +443,7 @@ class SettingsAudio: Codable, ObservableObject {
     var outputToInputChannelsMap: SettingsAudioOutputToInputChannelsMap = .init()
     @Published var gainDb: Float = 0.0
     @Published var preferStereoMic: Bool = false
+    var outputEffects: SettingsAudioOutputEffects = .init()
 
     init() {}
 
@@ -244,6 +451,7 @@ class SettingsAudio: Codable, ObservableObject {
         case audioOutputToInputChannelsMap
         case gainDb
         case preferStereoMic
+        case outputEffects
     }
 
     func encode(to encoder: any Encoder) throws {
@@ -251,6 +459,7 @@ class SettingsAudio: Codable, ObservableObject {
         try container.encode(.audioOutputToInputChannelsMap, outputToInputChannelsMap)
         try container.encode(.gainDb, gainDb)
         try container.encode(.preferStereoMic, preferStereoMic)
+        try container.encode(.outputEffects, outputEffects)
     }
 
     required init(from decoder: any Decoder) throws {
@@ -260,5 +469,6 @@ class SettingsAudio: Codable, ObservableObject {
                                                     .init())
         gainDb = container.decode(.gainDb, Float.self, 0.0)
         preferStereoMic = container.decode(.preferStereoMic, Bool.self, false)
+        outputEffects = container.decode(.outputEffects, SettingsAudioOutputEffects.self, .init())
     }
 }

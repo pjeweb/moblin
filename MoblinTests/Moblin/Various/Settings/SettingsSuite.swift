@@ -169,6 +169,90 @@ struct SettingsSuite {
         #expect(decoded.output == .streamAndRecording)
     }
 
+    @Test
+    func micEffects() throws {
+        let mic = SettingsMicsMic()
+        var decoded = try JSONDecoder().decode(SettingsMicsMic.self, from: JSONEncoder().encode(mic))
+        #expect(!decoded.effects.isEnabled)
+        mic.effects.compressor.enabled = true
+        mic.effects.compressor.threshold = -18
+        var low = SettingsAudioMixerEqualizer()
+        low.frequency = 250
+        var high = SettingsAudioMixerEqualizer()
+        high.enabled = true
+        high.frequency = 4000
+        mic.effects.equalizers = [low, high]
+        decoded = try JSONDecoder().decode(SettingsMicsMic.self, from: JSONEncoder().encode(mic))
+        #expect(decoded.effects.isEnabled)
+        #expect(decoded.effects.compressor == mic.effects.compressor)
+        #expect(decoded.effects.equalizers == [low, high])
+        #expect(!decoded.effects.expander.enabled)
+        decoded = try JSONDecoder().decode(SettingsMicsMic.self, from: Data(#"{"name":"Mic"}"#.utf8))
+        #expect(!decoded.effects.isEnabled)
+        #expect(decoded.effects.equalizers.isEmpty)
+        #expect(decoded.effects.compressor == SettingsAudioMixerCompressor())
+        let json = #"{"effects":{"deEsser":{"enabled":true}}}"#
+        decoded = try JSONDecoder().decode(SettingsMicsMic.self, from: Data(json.utf8))
+        #expect(decoded.effects.deEsser.enabled)
+        #expect(decoded.effects.deEsser.frequency == 6000)
+        #expect(decoded.effects.compressor.threshold == -24)
+    }
+
+    @Test
+    func micEffectsAreClampedOnDecode() throws {
+        let json = #"""
+        {"effects":{"equalizers":[{"enabled":true,"frequency":-1e30,"gain":40,"bandwidth":0}],
+        "compressor":{"threshold":10,"headroom":0,"attack":5,"release":0,"makeupGain":100},
+        "expander":{"threshold":-200,"ratio":0},
+        "deEsser":{"frequency":100,"bandwidth":9,"threshold":20,"maximumReduction":-3}}}
+        """#
+        let effects = try JSONDecoder().decode(SettingsMicsMic.self, from: Data(json.utf8)).effects
+        let equalizer = try #require(effects.equalizers.first)
+        #expect(equalizer.frequency == audioMixerEqualizerFrequencyRange.lowerBound)
+        #expect(equalizer.gain == audioMixerEqualizerGainRange.upperBound)
+        #expect(equalizer.bandwidth == audioMixerBandwidthRange.lowerBound)
+        #expect(effects.compressor.threshold == audioMixerCompressorThresholdRange.upperBound)
+        #expect(effects.compressor.headroom == audioMixerHeadroomRange.lowerBound)
+        #expect(effects.compressor.attack == audioMixerAttackRange.upperBound)
+        #expect(effects.compressor.release == audioMixerReleaseRange.lowerBound)
+        #expect(effects.compressor.makeupGain == audioMixerMakeupGainRange.upperBound)
+        #expect(effects.expander.threshold == audioMixerExpanderThresholdRange.lowerBound)
+        #expect(effects.expander.ratio == audioMixerRatioRange.lowerBound)
+        #expect(effects.deEsser.frequency == audioMixerDeEsserFrequencyRange.lowerBound)
+        #expect(effects.deEsser.bandwidth == audioMixerBandwidthRange.upperBound)
+        #expect(effects.deEsser.threshold == audioMixerDeEsserThresholdRange.upperBound)
+        #expect(effects.deEsser.maximumReduction == audioMixerMaximumReductionRange.lowerBound)
+        #expect(formatMixerFrequency(equalizer.frequency) == "20 Hz")
+    }
+
+    @Test
+    func audioOutputEffects() throws {
+        let audio = SettingsAudio()
+        var decoded = try JSONDecoder().decode(SettingsAudio.self, from: JSONEncoder().encode(audio))
+        #expect(!decoded.outputEffects.isEnabled)
+        var equalizer = SettingsAudioMixerEqualizer()
+        equalizer.enabled = true
+        equalizer.gain = 2
+        audio.outputEffects.equalizers = [equalizer]
+        decoded = try JSONDecoder().decode(SettingsAudio.self, from: JSONEncoder().encode(audio))
+        #expect(decoded.outputEffects.equalizers == [equalizer])
+        #expect(decoded.outputEffects.isEnabled)
+        decoded = try JSONDecoder().decode(SettingsAudio.self, from: Data("{}".utf8))
+        #expect(decoded.outputEffects.equalizers.isEmpty)
+    }
+
+    @Test
+    func micMuted() throws {
+        let mic = SettingsMicsMic()
+        var decoded = try JSONDecoder().decode(SettingsMicsMic.self, from: JSONEncoder().encode(mic))
+        #expect(!decoded.muted)
+        mic.muted = true
+        decoded = try JSONDecoder().decode(SettingsMicsMic.self, from: JSONEncoder().encode(mic))
+        #expect(decoded.muted)
+        decoded = try JSONDecoder().decode(SettingsMicsMic.self, from: Data("{}".utf8))
+        #expect(!decoded.muted)
+    }
+
     @Test(arguments: [
         MicIdCase(channel: nil, id: "AppleUSBAudioEngine:1 0"),
         MicIdCase(channel: 2, id: "AppleUSBAudioEngine:1 0 2"),

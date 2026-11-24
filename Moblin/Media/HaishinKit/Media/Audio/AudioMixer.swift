@@ -4,6 +4,11 @@ import AVFoundation
 let audioMixerFramesPerBlock = 1024
 let audioMixerMinimumLatency: Int64 = 2400
 
+struct AudioMixerLevels {
+    let sources: [String: Float]
+    let output: Float
+}
+
 struct AudioMixerSourceSettings {
     let id: String
     let bufferedAudio: UUID?
@@ -56,6 +61,7 @@ final class AudioMixerSource {
     private var numberOfInputChannels = -1
     private var readChannel = -1
     private var isSilent = true
+    private var peak: Float = 0
     private let samples = makeAudioMixerSamples(count: audioMixerFramesPerBlock)
     private let previousSamples = makeAudioMixerSamples(count: audioMixerFadeFrames)
 
@@ -104,6 +110,13 @@ final class AudioMixerSource {
         isSilent = true
     }
 
+    func takePeak() -> Float {
+        defer {
+            peak = 0
+        }
+        return peak
+    }
+
     func render(_ input: AudioMixerInput,
                 _ blockStart: Int64,
                 _ streamBus: AudioMixerBus,
@@ -114,15 +127,16 @@ final class AudioMixerSource {
         let previousDelay = currentDelay
         currentGain = isRemoved ? 0 : gain
         currentSends = sends
+        if input.numberOfChannels != numberOfInputChannels {
+            configure(input.numberOfChannels)
+        }
         guard startGain != 0 || currentGain != 0 else {
             isSilent = true
             if let pendingEffects {
                 activateEffects(pendingEffects)
             }
+            readBlock(input, blockStart - delay + voice.latency + effects.latency)
             return
-        }
-        if input.numberOfChannels != numberOfInputChannels {
-            configure(input.numberOfChannels)
         }
         let lookahead = requiredFrames(effects)
         var delay = delay
@@ -152,7 +166,7 @@ final class AudioMixerSource {
             isSilent = false
         } else {
             let latency = voice.latency + effects.latency
-            read(input, index + latency, audioMixerFramesPerBlock, samples)
+            readBlock(input, index + latency)
             if previousDelay != delay {
                 seek(input, blockStart - previousDelay + latency)
             }
@@ -215,6 +229,9 @@ final class AudioMixerSource {
             }
         }
         read(input, inputIndex, audioMixerFramesPerBlock, samples)
+        if samples == self.samples {
+            measurePeak()
+        }
         voice.process(samples)
         effectHistory?.copy(samples)
         return chain.process(samples)
@@ -251,6 +268,17 @@ final class AudioMixerSource {
                 activateEffects(pendingEffects)
             }
         }
+    }
+
+    private func readBlock(_ input: AudioMixerInput, _ index: Int64) {
+        read(input, index, audioMixerFramesPerBlock, samples)
+        measurePeak()
+    }
+
+    private func measurePeak() {
+        var blockPeak: Float = 0
+        vDSP_maxmgv(samples, 1, &blockPeak, vDSP_Length(audioMixerFramesPerBlock))
+        peak = max(peak, blockPeak)
     }
 
     private func read(_ input: AudioMixerInput,
@@ -309,6 +337,7 @@ final class AudioMixerBus {
     private let effectTransition = AudioMixerEffectBuffer()
     private let effectHistory = AudioMixerEffectBuffer()
     private var hasHistory = false
+    private var peak: Float = 0
 
     init() {
         let format = AVAudioFormat(standardFormatWithSampleRate: audioMixerSampleRate, channels: 1)!
@@ -362,6 +391,16 @@ final class AudioMixerBus {
         var low: Float = -1
         var high: Float = 1
         vDSP_vclip(samples, 1, &low, &high, samples, 1, frames)
+        var blockPeak: Float = 0
+        vDSP_maxmgv(samples, 1, &blockPeak, frames)
+        peak = max(peak, blockPeak)
+    }
+
+    func takeLevel() -> Float {
+        defer {
+            peak = 0
+        }
+        return peak
     }
 
     private func processEffects() {
@@ -445,6 +484,14 @@ final class AudioMixer {
     func setMasterMuted(_ muted: Bool) {
         streamBus.setMuted(muted)
         recordingBus.setMuted(muted)
+    }
+
+    func takeLevels() -> AudioMixerLevels {
+        var peaks: [String: Float] = [:]
+        for entry in graph?.entries ?? [] {
+            peaks[entry.source.id] = entry.source.takePeak()
+        }
+        return AudioMixerLevels(sources: peaks, output: streamBus.takeLevel())
     }
 
     func appendBuiltin(_ sampleBuffer: CMSampleBuffer, _ presentationTimeStamp: CMTime, delay: Double = 0) {

@@ -152,6 +152,11 @@ private struct MenuView: View {
                 QuickButtonMicView(model: model, mics: model.database.mics, modelMic: model.mic)
                     .navigationBarTitleDisplayMode(.inline)
             }
+        case .mixer:
+            NavigationStack {
+                QuickButtonMixerView(model: model, mics: model.database.mics, modelMic: model.mic)
+                    .navigationBarTitleDisplayMode(.inline)
+            }
         case .streamSwitcher:
             NavigationStack {
                 QuickButtonStreamSwitcherView(database: model.database)
